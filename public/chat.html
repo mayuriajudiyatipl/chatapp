@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat App</title>
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/favicon.ico" />
   </head>
   <body>
     <div class="chat-container">
@@ -13,15 +14,28 @@
         <ul id="users"></ul>
       </div>
       <div class="chat-main">
+        <div class="user-info">
+          <span>Hello, <span id="username"></span></span> |
+          <a id="clearChatLink" href="#">Clear Chat</a> |
+          <form action="/logout" method="POST">
+            <button type="submit">Logout</button>
+          </form>
+        </div>
         <div id="messages" class="messages"></div>
         <form id="messageForm">
           <input id="messageInput" type="text" placeholder="Type a message"
-            required>
+            required />
           <button type="submit">Send</button>
         </form>
       </div>
     </div>
+
+    <!-- Include Socket.IO -->
     <script src="/socket.io/socket.io.js"></script>
-    <script src="js/script.js"></script>
+
+    <!-- Include Emoji Picker -->
+
+    <!-- Custom Scripts -->
+    <script src="/js/script.js"></script>
   </body>
 </html>

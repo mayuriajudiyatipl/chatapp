@@ -1,19 +1,18 @@
 const express = require('express');
 const http = require('http');
-const socketIo = require('socket.io');
+const { Server } = require('socket.io');
 const path = require('path');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
 const { MongoClient } = require('mongodb');
-const { Server } = require('socket.io');
+const { body, validationResult } = require('express-validator');
 
 // MongoDB setup
-const uri = 'mongodb://127.0.0.1:27017'; // Updated connection string
+const uri = 'mongodb://127.0.0.1:27017'; // Replace with your actual MongoDB connection string
 const client = new MongoClient(uri);
 
 let users = {}; // Stores user info {username: {socketId, isAdmin, ...}}
-let generalRoomMessages = []; // Store messages for the general chat room
 
 async function connectMongo() {
   try {
@@ -45,8 +44,8 @@ app.use(
     resave: false,
     saveUninitialized: true,
     cookie: {
-      secure: false, // For local dev
-      maxAge: 60 * 60 * 1000, // Session expires after 1 hour
+      secure: false,
+      maxAge: 60 * 60 * 1000,
     },
   })
 );
@@ -58,40 +57,51 @@ app.get('/register', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'register.html'));
 });
 
-app.post('/register', async (req, res) => {
-  try {
-    const { firstName, lastName, email, username, password, confirmPassword, gender } = req.body;
-
-    if (password !== confirmPassword) {
-      return res.status(400).send('Passwords do not match');
+app.post(
+  '/register',
+  // Validation middleware
+  body('firstName').notEmpty().withMessage('First name is required'),
+  body('lastName').notEmpty().withMessage('Last name is required'),
+  body('email').isEmail().withMessage('Invalid email address'),
+  body('username').notEmpty().withMessage('Username is required'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
+  body('confirmPassword').custom((value, { req }) => value === req.body.password).withMessage('Passwords do not match'),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    try {
+      const { firstName, lastName, email, username, password, gender } = req.body;
 
-    const existingUser = await usersCollection.findOne({ $or: [{ username }, { email }] });
-    if (existingUser) {
-      return res.status(400).send('Username or email already taken');
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      const existingUser = await usersCollection.findOne({ $or: [{ username }, { email }] });
+      if (existingUser) {
+        return res.status(400).send('Username or email already taken');
+      }
+
+      const newUser = {
+        firstName,
+        lastName,
+        email,
+        username,
+        password: hashedPassword,
+        gender,
+        isAdmin: false,
+      };
+
+      await usersCollection.insertOne(newUser);
+      req.session.username = username;
+
+      res.redirect('/chat');
+    } catch (err) {
+      console.error('Error during registration:', err);
+      res.status(500).send('Internal server error');
     }
-
-    const newUser = {
-      firstName,
-      lastName,
-      email,
-      username,
-      password: hashedPassword,
-      gender,
-      isAdmin: false, // Default to regular user
-    };
-
-    await usersCollection.insertOne(newUser);
-    req.session.username = username;
-
-    res.redirect('/chat');
-  } catch (err) {
-    console.error('Error during registration:', err);
-    res.status(500).send('Internal server error');
   }
-});
+);
 
 // Login Route
 app.get('/', (req, res) => {
@@ -107,36 +117,47 @@ app.get('/', (req, res) => {
   }
 });
 
-app.post('/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-
-    const user = await usersCollection.findOne({ username });
-    if (!user) {
-      return res.status(400).send('User not found');
+app.post(
+  '/login',
+  // Validation middleware
+  body('username').notEmpty().withMessage('Username is required'),
+  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).send('Invalid credentials');
+    try {
+      const { username, password } = req.body;
+
+      const user = await usersCollection.findOne({ username });
+      if (!user) {
+        return res.status(400).send('User not found');
+      }
+
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(400).send('Invalid credentials');
+      }
+
+      req.session.username = username;
+      req.session.isAdmin = user.isAdmin;
+
+      res.redirect('/chat');
+    } catch (err) {
+      console.error('Error during login:', err);
+      res.status(500).send('Internal server error');
     }
-
-    // Set session data
-    req.session.username = username;
-    req.session.isAdmin = user.isAdmin;
-
-    res.redirect('/chat'); // Redirect to the chat page after successful login
-  } catch (err) {
-    console.error('Error during login:', err);
-    res.status(500).send('Internal server error');
   }
-});
+);
 
+// Session Route
 app.get('/session', (req, res) => {
   if (req.session.username) {
     return res.json({ username: req.session.username, isAdmin: req.session.isAdmin });
   }
-  res.json({ username: null }); // If no session, return null username
+  res.json({ username: null });
 });
 
 // Chat Route
@@ -167,94 +188,61 @@ app.post('/logout', (req, res) => {
   }
 });
 
+// Clear Chat Route
+app.get('/clearChat', (req, res) => {
+  try {
+    if (req.session.username) {
+      chatMessagesCollection.deleteMany({});
+      io.emit('clearChat', { message: `Chat history cleared by ${req.session.username}` });
+      res.send('Chat cleared successfully');
+    } else {
+      res.status(401).send('Unauthorized');
+    }
+  } catch (err) {
+    console.error('Error clearing chat:', err);
+    res.status(500).send('Internal server error');
+  }
+});
+
 // Socket.IO Events
 io.on('connection', (socket) => {
   let username;
 
   socket.on('userJoin', async (data) => {
-    try {
-      username = data.username;
-      const user = await usersCollection.findOne({ username });
-      if (user) {
-        users[username] = { isAdmin: user.isAdmin, socketId: socket.id };
-        io.emit('updateUsers', users); // Broadcast updated user list
+    username = data.username;
+    users[username] = { isAdmin: false, socketId: socket.id };
+    io.emit('updateUsers', users);
 
-        const messages = await chatMessagesCollection.find().sort({ timestamp: 1 }).toArray();
-        io.to(socket.id).emit('chatHistory', messages);
-      }
+    try {
+      const messages = await chatMessagesCollection
+        .find()
+        .sort({ timestamp: -1 })
+        .limit(100)
+        .toArray();
+
+      io.to(socket.id).emit('chatHistory', messages.reverse());
     } catch (err) {
-      console.error('Error during user join:', err);
+      console.error('Error fetching chat history:', err);
+      io.to(socket.id).emit('chatHistoryError', 'Failed to load chat history.');
     }
   });
 
   socket.on('sendMessage', async (message) => {
     try {
       const chatMessage = { username, message, timestamp: new Date() };
-      generalRoomMessages.push(chatMessage);
-
       await chatMessagesCollection.insertOne(chatMessage);
-
       io.emit('newMessage', chatMessage);
-
-      Object.values(users).forEach((user) => {
-        if (user.socketId !== socket.id) {
-          sendBrowserNotification(io, user.socketId, `${username}: ${message}`);
-        }
-      });
     } catch (err) {
       console.error('Error during sendMessage:', err);
     }
   });
 
   socket.on('disconnect', () => {
-    try {
-      if (username && users[username]) {
-        delete users[username];
-        io.emit('updateUsers', users);
-      }
-    } catch (err) {
-      console.error('Error during disconnect:', err);
+    if (username && users[username]) {
+      delete users[username];
+      io.emit('updateUsers', users);
     }
   });
-
-  socket.on('clearChat', async () => {
-    try {
-      if (users[username]?.isAdmin) {
-        generalRoomMessages = [];
-        await chatMessagesCollection.deleteMany({});
-        io.emit('clearChat');
-      }
-    } catch (err) {
-      console.error('Error during clearChat:', err);
-    }
-  });
-
-  socket.on('kickUser', (targetUsername) => {
-    try {
-      if (users[username]?.isAdmin && users[targetUsername]) {
-        const targetSocketId = users[targetUsername].socketId;
-        io.to(targetSocketId).emit('kicked');
-        delete users[targetUsername];
-        io.emit('updateUsers', users);
-      }
-    } catch (err) {
-      console.error('Error during kickUser:', err);
-    }
-  });
-});
-
-// Serve static files
-app.get('/profile', (req, res) => {
-  try {
-    if (req.session.username) {
-      res.sendFile(path.join(__dirname, 'public', 'profile.html'));
-    } else {
-      res.redirect('/');
-    }
-  } catch (err) {
-    console.error('Error during profile page load:', err);
-    res.status(500).send('Internal server error');
-  }
 });
 
 server.listen(3000, () => {

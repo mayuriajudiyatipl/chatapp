@@ -5,6 +5,10 @@
   box-sizing: border-box;
 }
 
+a {
+  text-decoration: none;
+}
+
 body {
   font-family: Arial, sans-serif;
   margin: 0;
@@ -39,6 +43,16 @@ body {
   flex-direction: column;
 }
 
+.chat-main .user-info {
+  padding: 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  background-color: #f4f4f4;
+  border-bottom: 1px solid #ddd;
+  align-items: center;
+}
+
 .messages {
   flex: 1;
   padding: 10px;
@@ -62,7 +76,6 @@ body {
 form input {
   flex: 1;
   padding: 10px;
-  margin-right: 10px;
   border: 1px solid #ddd;
   border-radius: 3px;
 }
@@ -156,4 +169,16 @@ h2 {
 
 .login-link a:hover {
   text-decoration: underline;
+}
+
+#messageForm {
+  display: flex;
+}
+
+#emoji-picker-container {
+  position: absolute;
+  bottom: 60px;
+  /* Adjust based on your layout */
+  right: 20px;
+  z-index: 10;
 }
