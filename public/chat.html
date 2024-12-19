@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat App</title>
+    <link rel="stylesheet" href="css/style.css">
+  </head>
+  <body>
+    <div class="chat-container">
+      <div class="sidebar">
+        <h3>Active Users</h3>
+        <ul id="users"></ul>
+      </div>
+      <div class="chat-main">
+        <div id="messages" class="messages"></div>
+        <form id="messageForm">
+          <input id="messageInput" type="text" placeholder="Type a message"
+            required>
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </div>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/script.js"></script>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "name": "chatapp",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "init-db": "node initDatabase.js",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^1.20.3",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "mongodb": "^6.12.0",
+    "mongoose": "^8.9.1",
+    "nodemon": "^3.1.9",
+    "path": "^0.12.7",
+    "socket.io": "^4.8.1"
+  }
+}
