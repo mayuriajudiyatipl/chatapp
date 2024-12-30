@@ -64,7 +64,7 @@ app.post(
   body('lastName').notEmpty().withMessage('Last name is required'),
   body('email').isEmail().withMessage('Invalid email address'),
   body('username').notEmpty().withMessage('Username is required'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
+  body('password').isLength({ min: 4 }).withMessage('Password must be at least 4 characters long'),
   body('confirmPassword').custom((value, { req }) => value === req.body.password).withMessage('Passwords do not match'),
   async (req, res) => {
     const errors = validationResult(req);
@@ -121,7 +121,7 @@ app.post(
   '/login',
   // Validation middleware
   body('username').notEmpty().withMessage('Username is required'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
+  body('password').isLength({ min: 4 }).withMessage('Password must be at least 4 characters long'),
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
